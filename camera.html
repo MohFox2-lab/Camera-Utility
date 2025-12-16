@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>درع الكاميرا – مبدع للتصحيح الآلي</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React 18 UMD -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- html2canvas + jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    /* مهم للطباعة: إبقاء الأسود أسود */
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    @media print {
+      @page { size: A4; margin: 0; }
+      body { margin: 0; padding: 0; }
+      .print\:hidden { display: none !important; }
+      .print\:shadow-none { box-shadow: none !important; }
+      .print\:m-0 { margin: 0 !important; }
+      .print\:static { position: static !important; }
+      .print\:transform-none { transform: none !important; }
+    }
+
+    /* تحسين عرض الفيديو */
+    video { background: #111; }
+  </style>
+</head>
+
+<body class="bg-slate-100">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useRef, useEffect, forwardRef } = React;
+
+    /* ================== Icons (كبّرتها) ================== */
+    const IconWrap = ({children}) => (
+      <span className="inline-flex items-center justify-center">{children}</span>
+    );
+
+    const Printer = () => (
+      <IconWrap>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="6 9 6 2 18 2 18 9"></polyline>
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+          <rect x="6" y="14" width="12" height="8"></rect>
+        </svg>
+      </IconWrap>
+    );
+
+    const Download = () => (
+      <IconWrap>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+      </IconWrap>
+    );
+
+    const Upload = () => (
+      <IconWrap>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="17 8 12 3 7 8"></polyline>
+          <line x1="12" y1="3" x2="12" y2="15"></line>
+        </svg>
+      </IconWrap>
+    );
+
+    const Settings2 = () => (
+      <IconWrap>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M20 7h-9"></path>
+          <path d="M14 17H5"></path>
+          <circle cx="17" cy="17" r="3"></circle>
+          <circle cx="7" cy="7" r="3"></circle>
+        </svg>
+      </IconWrap>
+    );
+
+    const FileText = () => (
+      <IconWrap>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+        </svg>
+      </IconWrap>
+    );
+
+    const SaveIcon = () => (
+      <IconWrap>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+          <polyline points="17 21 17 13 7 13 7 21"></polyline>
+          <polyline points="7 3 7 8 15 8"></polyline>
+        </svg>
+      </IconWrap>
+    );
+
+    /* (+ / -) كبّرتها كثير وواضح */
+    const Plus = () => (
+      <IconWrap>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+      </IconWrap>
+    );
+
+    const Minus = () => (
+      <IconWrap>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+      </IconWrap>
+    );
+
+    const ChevronDown = () => (
+      <IconWrap>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </IconWrap>
+    );
+
+    const ChevronUp = () => (
+      <IconWrap>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="18 15 12 9 6 15"></polyline>
+        </svg>
+      </IconWrap>
+    );
+
+    /* ================== UI Atoms ================== */
+    const Button = ({
+      children,
+      onClick,
+      className = "",
+      variant = "default",
+      size = "default",
+      type = "button",
+      disabled = false
+    }) => {
+      const base = "inline-flex items-center justify-center rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
+      const variants = {
+        default: "bg-blue-600 text-white hover:bg-blue-700",
+        outline: "border border-gray-300 bg-white hover:bg-gray-50",
+        ghost: "hover:bg-gray-100",
+        danger: "bg-rose-600 text-white hover:bg-rose-700",
+      };
+      const sizes = {
+        default: "px-4 py-2 text-sm",
+        sm: "px-3 py-1 text-sm",
+        icon: "h-10 w-10 p-0"
+      };
+      return (
+        <button type={type} onClick={onClick} disabled={disabled}
+          className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}>
+          {children}
+        </button>
+      );
+    };
+
+    const Select = ({ value, onValueChange, children }) => (
+      <select
+        value={value}
+        onChange={(e) => onValueChange(e.target.value)}
+        className="border border-gray-300 rounded-md px-3 py-2 bg-white text-sm"
+      >
+        {children}
+      </select>
+    );
+
+    const SelectOption = ({ value, children }) => <option value={value}>{children}</option>;
+
+    const Checkbox = ({ id, checked, onCheckedChange }) => (
+      <input
+        type="checkbox"
+        id={id}
+        checked={checked}
+        onChange={(e) => onCheckedChange(e.target.checked)}
+        className="w-4 h-4 rounded border-gray-300"
+      />
+    );
+
+    const Label = ({ htmlFor, children }) => (
+      <label htmlFor={htmlFor} className="text-sm cursor-pointer">
+        {children}
+      </label>
+    );
+
+    const CollapsibleSection = ({ title, icon, defaultOpen = false, children }) => {
+      const [isOpen, setIsOpen] = useState(defaultOpen);
+      return (
+        <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+          <Button
+            variant="ghost"
+            onClick={() => setIsOpen(!isOpen)}
+            className="w-full flex items-center justify-between p-3 hover:bg-gray-50"
+          >
+            <div className="flex items-center gap-2 text-gray-700 font-semibold text-sm">
+              {icon}
+              <span>{title}</span>
+            </div>
+            {isOpen ? <ChevronUp /> : <ChevronDown />}
+          </Button>
+          {isOpen && (
+            <div className="px-4 pb-4 pt-2 border-t border-gray-100">
+              {children}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    /* ================== Draggable ================== */
+    const DraggableBox = ({ children, position, onPositionChange }) => {
+      const [isDragging, setIsDragging] = useState(false);
+      const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+      const handleMouseDown = (e) => {
+        if (e.target.isContentEditable || e.target.tagName === "INPUT" || e.target.closest(".no-drag")) return;
+        setIsDragging(true);
+        setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+        e.preventDefault();
+      };
+
+      useEffect(() => {
+        if (!isDragging) return;
+        const move = (e) => onPositionChange({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+        const up = () => setIsDragging(false);
+        document.addEventListener("mousemove", move);
+        document.addEventListener("mouseup", up);
+        return () => {
+          document.removeEventListener("mousemove", move);
+          document.removeEventListener("mouseup", up);
+        };
+      }, [isDragging, dragStart, onPositionChange]);
+
+      return (
+        <div
+          onMouseDown={handleMouseDown}
+          className="absolute print:static print:transform-none"
+          style={{
+            left: `${position.x}px`,
+            top: `${position.y}px`,
+            cursor: isDragging ? "grabbing" : "grab",
+            zIndex: isDragging ? 1000 : 10,
+          }}
+        >
+          {children}
+        </div>
+      );
+    };
+
+    /* ================== IdBox ================== */
+    const IdBox = ({ scale = 1 }) => {
+      const arabicNumbers = ["٠","١","٢","٣","٤","٥","٦","٧","٨","٩"];
+      return (
+        <div
+          className="border-2 border-gray-800 p-1.5 bg-white origin-top-left"
+          style={{ width: "200px", transform: `scale(${scale})`, transformOrigin: "top left" }}
+        >
+          <div className="text-center font-bold border-b-2 border-gray-800 pb-1 mb-1 text-[10px]">
+            رقم السجل المدني
+          </div>
+
+          <div className="grid grid-cols-10 gap-[1px] mb-1">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className="border-2 border-gray-800 h-4 bg-white" />
+            ))}
+          </div>
+
+          <div className="grid grid-cols-10 gap-[1px]">
+            {Array.from({ length: 10 }).map((_, col) => (
+              <div key={col} className="flex flex-col gap-[1px]">
+                {Array.from({ length: 10 }).map((_, row) => (
+                  <div key={row} className="relative w-4 h-4 flex items-center justify-center">
+                    <span className="w-full h-full border-2 border-gray-800 rounded-full bg-white" />
+                    <span className="absolute text-[7px] font-bold text-gray-700 pointer-events-none">
+                      {arabicNumbers[row]}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    /* ================== EditableField ================== */
+    const EditableField = ({ label, value, onChange, onDelete, placeholder="............", showValue=true }) => {
+      const [isEditing, setIsEditing] = useState(false);
+      const [editValue, setEditValue] = useState(label);
+      const inputRef = useRef(null);
+
+      useEffect(() => {
+        if (isEditing && inputRef.current) {
+          inputRef.current.focus();
+          inputRef.current.select();
+        }
+      }, [isEditing]);
+
+      const handleBlur = () => {
+        setIsEditing(false);
+        if (editValue.trim() === "") onDelete && onDelete();
+        else if (editValue !== label) onChange && onChange(editValue);
+      };
+
+      const handleKeyDown = (e) => {
+        if (e.key === "Enter") handleBlur();
+        else if (e.key === "Escape") { setIsEditing(false); setEditValue(label); }
+      };
+
+      if (isEditing) {
+        return (
+          <div className="border-b border-gray-400 pb-1 bg-blue-50 px-1">
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleBlur}
+              onKeyDown={handleKeyDown}
+              className="w-full bg-transparent outline-none font-bold text-[11px]"
+              placeholder="اضغط Enter للحفظ أو امسح النص للحذف"
+            />
+          </div>
+        );
+      }
+
+      return (
+        <div
+          className="border-b border-gray-400 pb-1 cursor-pointer hover:bg-gray-50 transition-colors"
+          onDoubleClick={() => { setIsEditing(true); setEditValue(label); }}
+          title="انقر مرتين لتعديل اسم الحقل (امسح النص للحذف)"
+        >
+          <span className="font-bold ml-2">{label}:</span>
+          {showValue && <span className="text-gray-400">{value || placeholder}</span>}
+        </div>
+      );
+    };
+
+    /* ================== QuestionsGrid ================== */
+    const QuestionsGrid = ({
+      questionCount, questionColumns, answerCount, bubbleSize,
+      currentLanguage, customLettersAr, customLettersEn
+    }) => {
+      const arabicDigits = ["٠","١","٢","٣","٤","٥","٦","٧","٨","٩"];
+      const toArabicDigits = (n) => String(n).replace(/\d/g, d => arabicDigits[Number(d)]);
+
+      const perColumn = Math.ceil(questionCount / questionColumns);
+      const letters = currentLanguage === "ar" ? customLettersAr : customLettersEn;
+
+      const columns = [];
+      for (let col = 0; col < questionColumns; col++) {
+        const start = col * perColumn + 1;
+        let end = (col + 1) * perColumn;
+        if (start > questionCount) break;
+        if (end > questionCount) end = questionCount;
+        const questions = [];
+        for (let i = start; i <= end; i++) questions.push(i);
+        columns.push({ start, end, questions });
+      }
+
+      return (
+        <div
+          className="grid gap-2"
+          style={{ gridTemplateColumns: `repeat(${questionColumns}, 1fr)`, direction: currentLanguage === "ar" ? "rtl" : "ltr" }}
+        >
+          {columns.map((column, colIndex) => (
+            <div key={colIndex} className="relative">
+              {/* مربعات سود صغيرة أعلى كل عمود (2) */}
+              <div className="flex justify-between mb-1">
+                <div className="w-[3mm] h-[3mm] bg-black" />
+                <div className="w-[3mm] h-[3mm] bg-black" />
+              </div>
+
+              <table className="w-full border-collapse text-[10px]">
+                <thead>
+                  <tr>
+                    <th className="bg-blue-100 border border-blue-300 px-1 py-0.5 font-bold text-blue-800">س</th>
+                    {letters.slice(0, answerCount).map((letter, i) => (
+                      <th key={i} className="bg-blue-100 border border-blue-300 px-1 py-0.5 font-bold text-blue-800">
+                        {letter}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {column.questions.map((qNum) => (
+                    <tr key={qNum}>
+                      <td className="border border-gray-300 px-1 py-0.5 text-center font-bold text-gray-700">
+                        {currentLanguage === "ar" ? toArabicDigits(qNum) : qNum}
+                      </td>
+                      {Array.from({ length: answerCount }).map((_, i) => (
+                        <td key={i} className="border border-gray-300 p-0.5 text-center">
+                          <span className="inline-block border-2 border-gray-600 rounded-full bg-transparent"
+                            style={{ width: bubbleSize, height: bubbleSize }} />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      );
+    };
+
+    /* ================== SheetPreview ================== */
+    const SheetPreview = forwardRef((props, ref) => {
+      const {
+        questionCount, questionColumns, answerCount, bubbleSize,
+        logoScale, idScale, qrScale,
+        currentLanguage, showIdBox,
+        fields, onFieldLabelChange, onFieldDelete,
+        semester, logo, customLettersAr, customLettersEn,
+        currentDate, onDateChange, onLogoClick,
+        ministryBoxPosition, onMinistryBoxPositionChange,
+        logoPosition, onLogoPositionChange,
+        idBoxPosition, onIdBoxPositionChange,
+        qrPosition, onQrPositionChange,
+      } = props;
+
+      return (
+        <div
+          ref={ref}
+          className="relative bg-white mx-auto shadow-2xl overflow-hidden print:shadow-none print:m-0"
+          style={{ width: "210mm", minHeight: "297mm", padding: "5mm 8mm" }}
+        >
+          {/* 8 مربعات سود كبيرة حول الورقة (TVD Markers) */}
+          <div className="absolute top-[3mm] left-[3mm] w-[6mm] h-[6mm] bg-black" />
+          <div className="absolute top-[3mm] left-1/2 -translate-x-1/2 w-[6mm] h-[6mm] bg-black" />
+          <div className="absolute top-[3mm] right-[3mm] w-[6mm] h-[6mm] bg-black" />
+          <div className="absolute top-1/2 left-[3mm] -translate-y-1/2 w-[6mm] h-[6mm] bg-black" />
+          <div className="absolute top-1/2 right-[3mm] -translate-y-1/2 w-[6mm] h-[6mm] bg-black" />
+          <div className="absolute bottom-[3mm] left-[3mm] w-[6mm] h-[6mm] bg-black" />
+          <div className="absolute bottom-[3mm] left-1/2 -translate-x-1/2 w-[6mm] h-[6mm] bg-black" />
+          <div className="absolute bottom-[3mm] right-[3mm] w-[6mm] h-[6mm] bg-black" />
+
+          {/* عمود باركود (عدد الأوراق/تعريف) */}
+          <div className="absolute left-[7mm] bottom-[40mm] flex flex-col gap-[2px]">
+            {[2,3,4,5,6,7].map((h,i)=>(
+              <div key={i} className="w-[5mm] bg-black" style={{ height: `${h}mm` }} />
+            ))}
+          </div>
+
+          {/* صندوق الوزارة */}
+          <DraggableBox position={ministryBoxPosition} onPositionChange={onMinistryBoxPositionChange}>
+            <div className="bg-white shadow-sm border border-gray-200 rounded p-2">
+              {[
+                "المملكة العربية السعودية",
+                "وزارة التعليم",
+                "الإدارة العامة للتعليم بالمنطقة الشرقية",
+                "مكتب التعليم بمحافظة",
+                "مدرسة"
+              ].map((t,idx)=>(
+                <div key={idx} contentEditable suppressContentEditableWarning
+                  className="text-[13px] mb-1 outline-none focus:bg-blue-50 rounded px-1 no-drag">
+                  {t}
+                </div>
+              ))}
+            </div>
+          </DraggableBox>
+
+          {/* QR */}
+          <DraggableBox position={qrPosition} onPositionChange={onQrPositionChange}>
+            <div className="border border-dashed border-gray-400 flex items-center justify-center text-[10px] text-gray-500 bg-white shadow-sm"
+              style={{ width: `${64*qrScale}px`, height: `${64*qrScale}px`, transform: `scale(${qrScale})` }}>
+              QR
+            </div>
+          </DraggableBox>
+
+          {/* الشعار */}
+          <DraggableBox position={logoPosition} onPositionChange={onLogoPositionChange}>
+            <div onDoubleClick={onLogoClick}
+              className="w-[170px] h-[132px] border-2 border-dashed border-gray-300 flex items-center justify-center bg-white shadow-sm hover:bg-gray-50"
+              style={{ transform: `scale(${logoScale})` }}>
+              {logo ? (
+                <img src={logo} alt="Logo" className="max-w-full max-h-full object-contain pointer-events-none" />
+              ) : (
+                <span className="text-gray-400 pointer-events-none">صورة</span>
+              )}
+            </div>
+          </DraggableBox>
+
+          {/* صندوق السجل */}
+          {showIdBox && (
+            <DraggableBox position={idBoxPosition} onPositionChange={onIdBoxPositionChange}>
+              <div className="bg-white shadow-sm">
+                <IdBox scale={idScale} />
+              </div>
+            </DraggableBox>
+          )}
+
+          {/* المنطقة الآمنة */}
+          <div className="mx-[11mm] my-[9mm] mt-[80mm]" dir="rtl">
+            <div className="border-b-2 border-gray-800 pb-2 mb-3" />
+
+            <div className="text-center mb-3">
+              <div contentEditable suppressContentEditableWarning
+                className="text-[16px] font-bold text-emerald-700 outline-none focus:bg-blue-50 rounded px-2 inline-block">
+                الاختبارات الوطنية نافس
+              </div>
+              <div className="text-[11px] text-blue-600">
+                شيت إجابة الطالب – مبدع للتصحيح الآلي
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-x-3 gap-y-2 mb-3 text-[11px]">
+              {fields.map((field) => {
+                if (!field.visible) return null;
+                const isWide = field.id === "studentName";
+                let value = "................";
+                let showValue = true;
+
+                if (field.id === "semester") { value = semester === "1" ? "الأول" : "الثاني"; showValue = false; }
+                else if (field.id === "date") { value = currentDate; }
+
+                return (
+                  <div key={field.id} className={isWide ? "col-span-2" : ""}>
+                    {field.id === "date" ? (
+                      <div className="border-b border-gray-400 pb-1">
+                        <span className="font-bold ml-2">{field.label}:</span>
+                        <input
+                          type="text"
+                          value={currentDate}
+                          onChange={(e)=>onDateChange(e.target.value)}
+                          className="bg-transparent outline-none text-[11px] w-32"
+                          dir="ltr"
+                        />
+                      </div>
+                    ) : (
+                      <EditableField
+                        label={field.label}
+                        value={value}
+                        showValue={showValue}
+                        onChange={(newLabel)=>onFieldLabelChange(field.id, newLabel)}
+                        onDelete={()=>onFieldDelete(field.id)}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="bg-emerald-50 border border-emerald-300 rounded px-3 py-2 mb-4 text-[10px] text-emerald-700">
+              ❖ تعليمات: قم بتغميق دائرة واحدة فقط لكل سؤال
+            </div>
+
+            <QuestionsGrid
+              questionCount={questionCount}
+              questionColumns={questionColumns}
+              answerCount={answerCount}
+              bubbleSize={bubbleSize}
+              currentLanguage={currentLanguage}
+              customLettersAr={customLettersAr}
+              customLettersEn={customLettersEn}
+            />
+          </div>
+        </div>
+      );
+    });
+
+    /* ================== Camera Analyze (Markers + Barcode + OMR Test) ================== */
+    async function analyzeImageFromCanvas(canvas, opts) {
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      const c = canvas;
+
+      const confidenceFromCount = (ok, total) => Math.round((ok / Math.max(1,total)) * 100);
+
+      // ===== 1) TVD Markers (8) - نسبياً =====
+      const markers = [
+        { name: "TL", x: 0.03, y: 0.03 },
+        { name: "TC", x: 0.50, y: 0.03 },
+        { name: "TR", x: 0.97, y: 0.03 },
+        { name: "ML", x: 0.03, y: 0.50 },
+        { name: "MR", x: 0.97, y: 0.50 },
+        { name: "BL", x: 0.03, y: 0.97 },
+        { name: "BC", x: 0.50, y: 0.97 },
+        { name: "BR", x: 0.97, y: 0.97 },
+      ];
+
+      const sampleRegion = (cx, cy, size) => {
+        const x0 = Math.max(0, Math.floor(cx - size/2));
+        const y0 = Math.max(0, Math.floor(cy - size/2));
+        const w = Math.min(c.width - x0, size);
+        const h = Math.min(c.height - y0, size);
+        const data = ctx.getImageData(x0, y0, w, h).data;
+
+        let dark = 0, total = 0;
+        for (let i=0; i<data.length; i+=4) {
+          const lum = (data[i] + data[i+1] + data[i+2]) / 3;
+          const d = 1 - (lum / 255);
+          if (d > 0.55) dark++;
+          total++;
+        }
+        return dark / Math.max(1,total);
+      };
+
+      const markerSize = Math.max(18, Math.round(Math.min(c.width, c.height) * 0.03));
+      const markerResults = markers.map(m => {
+        const px = m.x * c.width;
+        const py = m.y * c.height;
+        const ratio = sampleRegion(px, py, markerSize);
+        return { ...m, ratio, ok: ratio > 0.35 };
+      });
+
+      const okCount = markerResults.filter(x=>x.ok).length;
+      const confidence = confidenceFromCount(okCount, markerResults.length);
+
+      // ===== 2) Barcode (عمود يسار أسفل) - نسبياً =====
+      const bc = { x: 0.065, y: 0.79, w: 0.04, h: 0.15 }; // تقريباً
+      const bcX = Math.round(bc.x * c.width);
+      const bcY = Math.round(bc.y * c.height);
+      const bcW = Math.max(10, Math.round(bc.w * c.width));
+      const bcH = Math.max(10, Math.round(bc.h * c.height));
+
+      let barcodeScore = 0;
+      try {
+        const img = ctx.getImageData(bcX, bcY, bcW, bcH).data;
+        let cols = bcW;
+        let rows = bcH;
+        let colDark = new Array(cols).fill(0);
+        for (let y=0; y<rows; y++) {
+          for (let x=0; x<cols; x++) {
+            const idx = (y*cols + x)*4;
+            const lum = (img[idx] + img[idx+1] + img[idx+2]) / 3;
+            const d = 1 - lum/255;
+            colDark[x] += d;
+          }
+        }
+        const maxCol = Math.max(...colDark);
+        const avgCol = colDark.reduce((a,b)=>a+b,0)/Math.max(1,colDark.length);
+        barcodeScore = Math.max(0, Math.min(1, (maxCol - avgCol) / (maxCol || 1)));
+      } catch(e) {
+        barcodeScore = 0;
+      }
+
+      // ===== 3) OMR Test (5 أسئلة من عمود واحد) =====
+      const questionColumns = opts.questionColumns;
+      const answerCount = opts.answerCount;
+      const questionCount = opts.questionCount;
+
+      const OMR_GRID = {
+        x: 0.16,
+        y: 0.33,
+        w: 0.78,
+        h: 0.58
+      };
+
+      const OMR_TEST = {
+        testColumnIndex: 0,
+        testQuestions: 5,
+        sampleRadiusPx: 6,
+        markThreshold: 0.22
+      };
+
+      const sampleDarknessAtPixel = (px, py, r) => {
+        const x0 = Math.max(0, Math.floor(px - r));
+        const y0 = Math.max(0, Math.floor(py - r));
+        const x1 = Math.min(c.width - 1, Math.floor(px + r));
+        const y1 = Math.min(c.height - 1, Math.floor(py + r));
+
+        const img = ctx.getImageData(x0, y0, x1 - x0 + 1, y1 - y0 + 1).data;
+        let sum = 0, cnt = 0;
+
+        const ww = (x1 - x0 + 1);
+        const hh = (y1 - y0 + 1);
+        const cx = ww / 2;
+        const cy = hh / 2;
+
+        for (let y = 0; y < hh; y++) {
+          for (let x = 0; x < ww; x++) {
+            const dx = x - cx;
+            const dy = y - cy;
+            if (dx*dx + dy*dy > r*r) continue;
+
+            const idx = (y * ww + x) * 4;
+            const R = img[idx], G = img[idx+1], B = img[idx+2];
+            const lum = (R + G + B) / 3;
+            const dark = 1 - (lum / 255);
+            sum += dark;
+            cnt++;
+          }
+        }
+        return sum / Math.max(1, cnt);
+      };
+
+      const readOMR_Test = () => {
+        const cols = questionColumns;
+        const answers = answerCount;
+        const totalQ = questionCount;
+        const perCol = Math.ceil(totalQ / cols);
+        const colIndex = Math.min(cols - 1, Math.max(0, OMR_TEST.testColumnIndex));
+
+        const gx = OMR_GRID.x * c.width;
+        const gy = OMR_GRID.y * c.height;
+        const gw = OMR_GRID.w * c.width;
+        const gh = OMR_GRID.h * c.height;
+
+        const colW = gw / cols;
+        const colX = gx + colIndex * colW;
+        const colY = gy;
+        const colH = gh;
+
+        const rowH = colH / perCol;
+
+        const results = [];
+        for (let i = 0; i < Math.min(OMR_TEST.testQuestions, perCol); i++) {
+          const qNumber = colIndex * perCol + (i + 1);
+          if (qNumber > totalQ) break;
+
+          const cy = colY + (i + 0.5) * rowH;
+
+          const padding = 0.18 * colW;
+          const usableW = colW - 2 * padding;
+
+          const darknessList = [];
+          for (let a = 0; a < answers; a++) {
+            const cx = colX + padding + (a + 0.5) * (usableW / answers);
+            const d = sampleDarknessAtPixel(cx, cy, OMR_TEST.sampleRadiusPx);
+            darknessList.push(d);
+          }
+
+          const maxD = Math.max(...darknessList);
+          const maxIdx = darknessList.indexOf(maxD);
+          const sorted = [...darknessList].sort((a,b)=>b-a);
+          const second = sorted[1] ?? 0;
+          const gap = maxD - second;
+
+          const marked = (maxD >= OMR_TEST.markThreshold) && (gap >= 0.02);
+
+          results.push({
+            q: qNumber,
+            marked,
+            choiceIndex: marked ? maxIdx : null,
+            darkness: darknessList
+          });
+        }
+
+        return { grid: OMR_GRID, test: OMR_TEST, perCol, colIndex, results };
+      };
+
+      const omr = readOMR_Test();
+
+      return {
+        width: c.width,
+        height: c.height,
+        okCount,
+        totalMarkers: markerResults.length,
+        confidence,
+        markers: markerResults,
+        barcode: { region: bc, score: barcodeScore },
+        omr,
+        note:
+          confidence >= 75
+            ? "✅ تم العثور على أغلب مربعات TVD"
+            : "⚠️ لم تظهر مربعات TVD كفاية (قرّب/عدّل الإضاءة/استقيم الورقة)"
+      };
+    }
+
+    /* ================== Main App ================== */
+    const AnswerSheetApp = () => {
+      const [activeTab, setActiveTab] = useState("sheet"); // sheet | camera | results
+
+      // sheet settings
+      const [questionCount, setQuestionCount] = useState(60);
+      const [questionColumns, setQuestionColumns] = useState(3);
+      const [answerCount, setAnswerCount] = useState(4);
+      const [bubbleSize, setBubbleSize] = useState(14);
+      const [logoScale, setLogoScale] = useState(1);
+      const [idScale, setIdScale] = useState(1);
+      const [qrScale, setQrScale] = useState(1);
+      const [currentLanguage, setCurrentLanguage] = useState("ar");
+      const [semester, setSemester] = useState("1");
+      const [showIdBox, setShowIdBox] = useState(true);
+      const [logo, setLogo] = useState(null);
+
+      const [customLettersAr, setCustomLettersAr] = useState(["أ","ب","ج","د","هـ","و"]);
+      const [customLettersEn, setCustomLettersEn] = useState(["A","B","C","D","E","F"]);
+
+      const [currentDate, setCurrentDate] = useState(() => {
+        const t = new Date();
+        const y = t.getFullYear();
+        const m = String(t.getMonth()+1).padStart(2,"0");
+        const d = String(t.getDate()).padStart(2,"0");
+        return `${y}/${m}/${d}`;
+      });
+
+      const [ministryBoxPosition, setMinistryBoxPosition] = useState({ x: 550, y: 20 });
+      const [logoPosition, setLogoPosition] = useState({ x: 280, y: 20 });
+      const [idBoxPosition, setIdBoxPosition] = useState({ x: 20, y: 20 });
+      const [qrPosition, setQrPosition] = useState({ x: 650, y: 20 });
+
+      const [fields, setFields] = useState([
+        { id: "studentName", label: "اسم الطالب رباعي", visible: true },
+        { id: "stage", label: "المرحلة", visible: true },
+        { id: "grade", label: "الصف", visible: true },
+        { id: "subject", label: "المادة", visible: true },
+        { id: "teacherName", label: "اسم المعلم", visible: true },
+        { id: "studentNumber", label: "رقم الطالب", visible: true },
+        { id: "semester", label: "الفصل الدراسي", visible: true },
+        { id: "idNumber", label: "الرقم", visible: true },
+        { id: "date", label: "التاريخ", visible: true },
+      ]);
+
+      const fileInputRef = useRef(null);
+      const sheetRef = useRef(null);
+
+      // camera refs
+      const videoRef = useRef(null);
+      const photoCanvasRef = useRef(null);
+      const [cameraAllowed, setCameraAllowed] = useState(null); // null | true | false
+      const [streaming, setStreaming] = useState(false);
+      const [cameraError, setCameraError] = useState("");
+      const [analysis, setAnalysis] = useState(null);
+      const [captures, setCaptures] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("mubdea_captures")||"[]"); }
+        catch { return []; }
+      });
+
+      const saveCaptures = (arr) => {
+        setCaptures(arr);
+        localStorage.setItem("mubdea_captures", JSON.stringify(arr));
+      };
+
+      /* ======= Handlers: sheet ======= */
+      const handleQuestionCountChange = (delta) => {
+        let v = questionCount + delta;
+        if (v < 3) v = 3;
+        if (v > 120) v = 120;
+        if (v % 3 !== 0) v = Math.round(v / 3) * 3;
+        setQuestionCount(v);
+      };
+
+      const handleAnswerCountChange = (delta) => {
+        let v = answerCount + delta;
+        if (v < 2) v = 2;
+        if (v > 6) v = 6;
+        setAnswerCount(v);
+      };
+
+      const handleBubbleSizeChange = (delta) => {
+        let v = bubbleSize + delta * 2;
+        if (v < 10) v = 10;
+        if (v > 26) v = 26;
+        setBubbleSize(v);
+      };
+
+      const handleLogoScaleChange = (delta) => {
+        let v = logoScale + delta * 0.1;
+        if (v < 0.4) v = 0.4;
+        if (v > 2.0) v = 2.0;
+        setLogoScale(v);
+      };
+
+      const handleIdScaleChange = (delta) => {
+        let v = idScale + delta * 0.1;
+        if (v < 0.6) v = 0.6;
+        if (v > 1.6) v = 1.6;
+        setIdScale(v);
+      };
+
+      const handleQrScaleChange = (delta) => {
+        let v = qrScale + delta * 0.1;
+        if (v < 0.6) v = 0.6;
+        if (v > 1.6) v = 1.6;
+        setQrScale(v);
+      };
+
+      const handleLogoUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => setLogo(ev.target.result);
+        reader.readAsDataURL(file);
+      };
+
+      const handleEditLetters = () => {
+        const letters = currentLanguage === "ar" ? customLettersAr : customLettersEn;
+        const current = letters.slice(0, answerCount).join(",");
+        const input = prompt("أدخل الحروف مفصولة بفواصل:", current);
+        if (!input) return;
+        let parts = input.split(",").map(s=>s.trim()).filter(Boolean);
+        if (parts.length < 2) return alert("يجب إدخال حرفين على الأقل");
+        if (parts.length > 6) parts = parts.slice(0,6);
+        if (currentLanguage === "ar") setCustomLettersAr(parts);
+        else setCustomLettersEn(parts);
+        if (answerCount > parts.length) setAnswerCount(parts.length);
+      };
+
+      const handlePrint = () => window.print();
+
+      const handleDownloadPDF = async () => {
+        if (!sheetRef.current) return;
+        const canvas = await html2canvas(sheetRef.current, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: "#ffffff"
+        });
+        const imgData = canvas.toDataURL("image/png");
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF("p","mm","a4");
+        const w = pdf.internal.pageSize.getWidth();
+        const h = pdf.internal.pageSize.getHeight();
+        pdf.addImage(imgData, "PNG", 0, 0, w, h);
+        pdf.save("answer-sheet.pdf");
+      };
+
+      const handleFieldLabelChange = (fieldId, newLabel) => {
+        setFields(fields.map(f => f.id === fieldId ? { ...f, label: newLabel } : f));
+      };
+      const handleFieldDelete = (fieldId) => {
+        setFields(fields.map(f => f.id === fieldId ? { ...f, visible:false } : f));
+      };
+      const handleFieldVisibilityChange = (fieldId, visible) => {
+        setFields(fields.map(f => f.id === fieldId ? { ...f, visible } : f));
+      };
+
+      const handleSaveSettings = () => {
+        const settings = {
+          questionCount, questionColumns, answerCount, bubbleSize,
+          logoScale, idScale, qrScale, currentLanguage, semester, showIdBox,
+          fields, customLettersAr, customLettersEn,
+          ministryBoxPosition, logoPosition, idBoxPosition, qrPosition, logo
+        };
+        localStorage.setItem("answerSheetSettings", JSON.stringify(settings));
+        alert("تم حفظ الإعدادات بنجاح!");
+      };
+
+      /* ======= Camera permission modal logic ======= */
+      const askCameraPermission = () => {
+        // هذا “تجهيز واجهة” (مسموح/غير مسموح)
+        setCameraAllowed(null);
+        setCameraError("");
+      };
+
+      const stopCamera = () => {
+        try {
+          const v = videoRef.current;
+          if (v && v.srcObject) {
+            v.srcObject.getTracks().forEach(t => t.stop());
+            v.srcObject = null;
+          }
+        } catch {}
+        setStreaming(false);
+      };
+
+      const startCamera = async () => {
+        setCameraError("");
+        try {
+          // ملاحظة: بعض البيئات تمنع الكاميرا على file://
+          const constraints = {
+            video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+          };
+          const stream = await navigator.mediaDevices.getUserMedia(constraints);
+          const v = videoRef.current;
+          v.srcObject = stream;
+          await v.play();
+          setStreaming(true);
+        } catch (e) {
+          setStreaming(false);
+          setCameraError(
+            "تعذر تشغيل الكاميرا. السبب غالباً: المتصفح يمنع الكاميرا على file:// أو تحتاج https / WebView. "
+            + (e?.message ? ("(" + e.message + ")") : "")
+          );
+        }
+      };
+
+      const capturePhoto = async () => {
+        setCameraError("");
+        setAnalysis(null);
+
+        const v = videoRef.current;
+        const c = photoCanvasRef.current;
+        if (!v || !c || !streaming) return;
+
+        const w = v.videoWidth || 1280;
+        const h = v.videoHeight || 720;
+
+        c.width = w;
+        c.height = h;
+
+        const ctx = c.getContext("2d");
+        ctx.drawImage(v, 0, 0, w, h);
+
+        // snapshot as dataURL (خفيفة: jpeg)
+        const dataUrl = c.toDataURL("image/jpeg", 0.92);
+
+        const analysisResult = await analyzeImageFromCanvas(c, {
+          questionColumns,
+          answerCount,
+          questionCount
+        });
+        setAnalysis(analysisResult);
+
+        // store capture
+        const item = {
+          id: "SHEET-" + String(Date.now()).slice(-6),
+          time: new Date().toLocaleString(),
+          img: dataUrl,
+          analysis: analysisResult
+        };
+        const next = [item, ...captures].slice(0, 30);
+        saveCaptures(next);
+      };
+
+      /* ======= Tabs UI ======= */
+      const tabBtnClass = (tab) =>
+        `px-4 py-1.5 rounded-full flex items-center gap-2 text-sm border transition ${
+          activeTab === tab
+            ? "bg-emerald-500 text-white border-emerald-400"
+            : "bg-slate-800 text-slate-100 border-slate-600 hover:bg-slate-700"
+        }`;
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100" dir="rtl">
+          <div className="max-w-[1400px] mx-auto p-4 md:p-6">
+
+            {/* Tabs */}
+            <div className="print:hidden mb-4 flex justify-start">
+              <div className="bg-slate-900 rounded-full px-2 py-1 flex gap-2">
+                <button className={tabBtnClass("sheet")} onClick={() => setActiveTab("sheet")}>
+                  <span>📄</span><span>شيت الإجابة</span>
+                </button>
+                <button className={tabBtnClass("camera")} onClick={() => setActiveTab("camera")}>
+                  <span>📷</span><span>كاميرا مبدع</span>
+                </button>
+                <button className={tabBtnClass("results")} onClick={() => setActiveTab("results")}>
+                  <span>📊</span><span>نتائج المصحح</span>
+                </button>
+              </div>
+            </div>
+
+            {/* ================= Sheet Tab ================= */}
+            {activeTab === "sheet" && (
+              <>
+                <div className="mb-6 text-center print:hidden">
+                  <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-l from-emerald-600 to-blue-600 bg-clip-text text-transparent">
+                    درع الكاميرا – مبدع للتصحيح الآلي
+                  </h1>
+                  <p className="text-gray-500 mt-1 text-sm">نظام إنشاء أوراق الإجابات للتصحيح الآلي</p>
+                </div>
+
+                <div className="space-y-3 mb-6 print:hidden">
+
+                  {/* Top bar */}
+                  <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <Button onClick={handlePrint} className="bg-emerald-500 hover:bg-emerald-600 text-white gap-2">
+                          <Printer /> طباعة
+                        </Button>
+                        <Button variant="outline" onClick={handleDownloadPDF} className="gap-2 bg-blue-50 border-blue-300 hover:bg-blue-100">
+                          <Download /> تنزيل PDF
+                        </Button>
+                        <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="gap-2">
+                          <Upload /> رفع شعار
+                        </Button>
+                        <Button variant="outline" onClick={handleSaveSettings} className="gap-2 bg-green-50 border-green-300 hover:bg-green-100">
+                          <SaveIcon /> حفظ الإعدادات
+                        </Button>
+                        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                      </div>
+
+                      <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+                        <span className="text-sm text-gray-600">حجم الصورة:</span>
+                        <Button variant="ghost" size="icon" onClick={() => handleLogoScaleChange(-1)}>
+                          <Minus />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleLogoScaleChange(1)}>
+                          <Plus />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Collapsibles */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <CollapsibleSection title="الأسئلة والخيارات" icon={<FileText />} defaultOpen={true}>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">عدد الأسئلة:</span>
+                          <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="icon" onClick={() => handleQuestionCountChange(-3)}>
+                              <Minus />
+                            </Button>
+                            <span className="font-bold text-emerald-600 min-w-[32px] text-center">{questionCount}</span>
+                            <Button variant="ghost" size="icon" onClick={() => handleQuestionCountChange(3)}>
+                              <Plus />
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">الأعمدة:</span>
+                          <Select value={String(questionColumns)} onValueChange={(v) => setQuestionColumns(parseInt(v,10))}>
+                            <SelectOption value="2">2</SelectOption>
+                            <SelectOption value="3">3</SelectOption>
+                            <SelectOption value="4">4</SelectOption>
+                          </Select>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">عدد الخيارات:</span>
+                          <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="icon" onClick={() => handleAnswerCountChange(-1)}>
+                              <Minus />
+                            </Button>
+                            <span className="font-bold text-blue-600 min-w-[20px] text-center">{answerCount}</span>
+                            <Button variant="ghost" size="icon" onClick={() => handleAnswerCountChange(1)}>
+                              <Plus />
+                            </Button>
+                          </div>
+                        </div>
+
+                        <Button variant="outline" onClick={handleEditLetters} className="w-full">تعديل الحروف</Button>
+                      </div>
+                    </CollapsibleSection>
+
+                    <CollapsibleSection title="إعدادات الحجم" icon={<Settings2 />}>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">حجم الدوائر:</span>
+                          <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="icon" onClick={() => handleBubbleSizeChange(-1)}>
+                              <Minus />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleBubbleSizeChange(1)}>
+                              <Plus />
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">حجم صندوق السجل:</span>
+                          <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="icon" onClick={() => handleIdScaleChange(-1)}>
+                              <Minus />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleIdScaleChange(1)}>
+                              <Plus />
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">حجم QR:</span>
+                          <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="icon" onClick={() => handleQrScaleChange(-1)}>
+                              <Minus />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleQrScaleChange(1)}>
+                              <Plus />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </CollapsibleSection>
+
+                    <CollapsibleSection title="اللغة" icon={<Settings2 />}>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">اللغة:</span>
+                          <Select value={currentLanguage} onValueChange={setCurrentLanguage}>
+                            <SelectOption value="ar">عربي (RTL)</SelectOption>
+                            <SelectOption value="en">English</SelectOption>
+                          </Select>
+                        </div>
+                      </div>
+                    </CollapsibleSection>
+                  </div>
+
+                  <CollapsibleSection title="قائمة الحقول (تفعيل/إخفاء)" icon={<Settings2 />}>
+                    <div className="mb-3 text-xs text-gray-500 bg-blue-50 p-2 rounded">
+                      💡 انقر مرتين على أي حقل داخل الشيت لتعديل اسمه (امسح النص للحذف)
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                      {fields.map((field) => (
+                        <div key={field.id} className="flex items-center gap-2">
+                          <Checkbox id={field.id} checked={field.visible}
+                            onCheckedChange={(checked)=>handleFieldVisibilityChange(field.id, checked)} />
+                          <Label htmlFor={field.id}>{field.label}</Label>
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-2">
+                        <Checkbox id="showIdBox" checked={showIdBox} onCheckedChange={setShowIdBox} />
+                        <Label htmlFor="showIdBox">رقم السجل المدني</Label>
+                      </div>
+                    </div>
+                  </CollapsibleSection>
+
+                </div>
+
+                <SheetPreview
+                  ref={sheetRef}
+                  questionCount={questionCount}
+                  questionColumns={questionColumns}
+                  answerCount={answerCount}
+                  bubbleSize={bubbleSize}
+                  logoScale={logoScale}
+                  idScale={idScale}
+                  qrScale={qrScale}
+                  currentLanguage={currentLanguage}
+                  showIdBox={showIdBox}
+                  fields={fields}
+                  onFieldLabelChange={handleFieldLabelChange}
+                  onFieldDelete={handleFieldDelete}
+                  semester={semester}
+                  logo={logo}
+                  customLettersAr={customLettersAr}
+                  customLettersEn={customLettersEn}
+                  currentDate={currentDate}
+                  onDateChange={setCurrentDate}
+                  onLogoClick={()=>fileInputRef.current?.click()}
+                  ministryBoxPosition={ministryBoxPosition}
+                  onMinistryBoxPositionChange={setMinistryBoxPosition}
+                  logoPosition={logoPosition}
+                  onLogoPositionChange={setLogoPosition}
+                  idBoxPosition={idBoxPosition}
+                  onIdBoxPositionChange={setIdBoxPosition}
+                  qrPosition={qrPosition}
+                  onQrPositionChange={setQrPosition}
+                />
+              </>
+            )}
+
+            {/* ================= Camera Tab ================= */}
+            {activeTab === "camera" && (
+              <div className="print:hidden">
+                <div className="bg-white rounded-2xl shadow-md border p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-lg font-bold text-slate-800">📷 كاميرا مبدع</div>
+                      <div className="text-xs text-slate-500 mt-1">
+                        تذكير: تشغيل الكاميرا قد لا يعمل على file://. الأفضل WebView أو HTTPS/localhost.
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" onClick={() => { setAnalysis(null); setCameraError(""); }}>
+                        تنظيف النتائج
+                      </Button>
+                      <Button variant="danger" onClick={stopCamera} disabled={!streaming}>
+                        إيقاف الكاميرا
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* permission box */}
+                  <div className="mt-4 border rounded-xl p-3 bg-slate-50">
+                    <div className="font-bold text-sm text-slate-800 mb-2">السماح بالكاميرا</div>
+
+                    {cameraAllowed === null ? (
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <Button onClick={() => { setCameraAllowed(true); startCamera(); }} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+                          ✅ مسموح
+                        </Button>
+                        <Button variant="outline" onClick={() => { setCameraAllowed(false); stopCamera(); }} className="gap-2">
+                          ⛔ غير مسموح
+                        </Button>
+                        <div className="text-xs text-slate-600">
+                          اختر “مسموح” لتجربة تشغيل الكاميرا.
+                        </div>
+                      </div>
+                    ) : cameraAllowed === false ? (
+                      <div className="text-sm text-rose-600 font-bold">
+                        تم اختيار: غير مسموح. (الكاميرا متوقفة)
+                      </div>
+                    ) : (
+                      <div className="text-sm text-emerald-700 font-bold">
+                        تم اختيار: مسموح. {streaming ? "✅ الكاميرا تعمل" : "⏳ محاولة تشغيل..."}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* camera area */}
+                  <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="rounded-xl overflow-hidden border bg-black">
+                      <video ref={videoRef} className="w-full h-[340px] object-cover" playsInline muted />
+                    </div>
+
+                    <div className="rounded-xl border p-3 bg-white">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-bold text-slate-800">التقاط وتحليل</div>
+                        <Button onClick={capturePhoto} disabled={!streaming} className="bg-blue-600 hover:bg-blue-700">
+                          📸 التقط + حلّل
+                        </Button>
+                      </div>
+
+                      {cameraError && (
+                        <div className="mt-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2">
+                          {cameraError}
+                        </div>
+                      )}
+
+                      <canvas ref={photoCanvasRef} className="hidden"></canvas>
+
+                      {analysis && (
+                        <div className="mt-3 space-y-3">
+                          <div className="rounded-xl border p-3">
+                            <div className="font-bold text-slate-800">📌 TVD</div>
+                            <div className="text-sm text-slate-600 mt-1">
+                              اكتشاف: {analysis.okCount}/{analysis.totalMarkers} — ثقة: {analysis.confidence}%
+                            </div>
+                            <div className="text-xs mt-1">{analysis.note}</div>
+                          </div>
+
+                          <div className="rounded-xl border p-3">
+                            <div className="font-bold text-slate-800">📌 باركود (تقديري)</div>
+                            <div className="text-sm text-slate-600 mt-1">
+                              Score: {(analysis.barcode.score || 0).toFixed(3)}
+                            </div>
+                          </div>
+
+                          {analysis.omr && (
+                            <div className="rounded-xl border p-3">
+                              <div className="font-bold text-slate-800">🟦 OMR (تجربة): 5 أسئلة من عمود واحد</div>
+                              <div className="text-xs text-slate-600 mt-1">
+                                Column: {analysis.omr.colIndex} — perCol: {analysis.omr.perCol}
+                              </div>
+
+                              <div className="mt-2 overflow-auto">
+                                <table className="w-full text-xs border">
+                                  <thead className="bg-slate-50">
+                                    <tr>
+                                      <th className="border px-2 py-1">س</th>
+                                      <th className="border px-2 py-1">مظللة؟</th>
+                                      <th className="border px-2 py-1">الاختيار</th>
+                                      <th className="border px-2 py-1">قراءات السواد</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {analysis.omr.results.map((r, idx) => (
+                                      <tr key={idx}>
+                                        <td className="border px-2 py-1 text-center">{r.q}</td>
+                                        <td className="border px-2 py-1 text-center">{r.marked ? "✅" : "—"}</td>
+                                        <td className="border px-2 py-1 text-center">
+                                          {r.choiceIndex === null ? "—" : (r.choiceIndex + 1)}
+                                        </td>
+                                        <td className="border px-2 py-1 text-center">
+                                          {r.darkness.map(d => d.toFixed(3)).join(" , ")}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+
+                              <div className="mt-2 text-[11px] text-slate-600">
+                                إذا النتائج تخبط: نضبط نسب منطقة OMR لاحقاً (بدون ما نلمس الشيت).
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ================= Results Tab ================= */}
+            {activeTab === "results" && (
+              <div className="print:hidden">
+                <div className="bg-white rounded-2xl shadow-md border p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-lg font-bold text-slate-800">📊 نتائج المصحح</div>
+                      <div className="text-xs text-slate-500 mt-1">
+                        يعرض آخر الالتقاطات (محفوظة محليًا في الجهاز).
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={() => saveCaptures([])}>
+                        مسح السجل
+                      </Button>
+                      <Button variant="outline" onClick={() => setActiveTab("camera")}>
+                        اذهب للكاميرا
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 overflow-auto">
+                    <table className="w-full text-sm border border-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="border px-2 py-2">#</th>
+                          <th className="border px-2 py-2">معرّف</th>
+                          <th className="border px-2 py-2">الوقت</th>
+                          <th className="border px-2 py-2">TVD</th>
+                          <th className="border px-2 py-2">باركود</th>
+                          <th className="border px-2 py-2">عرض</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {captures.length === 0 ? (
+                          <tr>
+                            <td className="border px-2 py-3 text-center text-slate-500" colSpan="6">
+                              لا يوجد نتائج بعد. اذهب لتبويب الكاميرا والتقط ورقة.
+                            </td>
+                          </tr>
+                        ) : captures.map((c, idx) => (
+                          <tr key={c.id}>
+                            <td className="border px-2 py-2 text-center">{idx+1}</td>
+                            <td className="border px-2 py-2 text-center">{c.id}</td>
+                            <td className="border px-2 py-2 text-center">{c.time}</td>
+                            <td className="border px-2 py-2 text-center">
+                              {c.analysis?.okCount}/{c.analysis?.totalMarkers} ({c.analysis?.confidence}%)
+                            </td>
+                            <td className="border px-2 py-2 text-center">
+                              {(c.analysis?.barcode?.score ?? 0).toFixed(3)}
+                            </td>
+                            <td className="border px-2 py-2 text-center">
+                              <Button variant="outline" onClick={() => {
+                                setActiveTab("camera");
+                                setAnalysis(c.analysis);
+                              }}>
+                                فتح التحليل
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Preview last image */}
+                  {captures[0]?.img && (
+                    <div className="mt-4 border rounded-xl p-3">
+                      <div className="text-sm font-bold text-slate-800 mb-2">آخر صورة ملتقطة</div>
+                      <img src={captures[0].img} alt="last capture" className="w-full max-h-[420px] object-contain bg-black rounded" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      );
+    };
+
+    /* ================== Boot ================== */
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<AnswerSheetApp />);
+  </script>
+</body>
+</html>
